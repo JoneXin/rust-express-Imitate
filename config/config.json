@@ -1,0 +1,6 @@
+{
+    "app_config": {
+        "request_body_size": 100,
+        "port": 3345
+    }
+}
