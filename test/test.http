@@ -1,0 +1,17 @@
+GET http://127.0.0.1:4444/user/query?name=1&age=3121
+Keep-Alive: timeout=5, max=1000
+Content-Type: application/json
+
+### 
+
+POST http://192.168.0.32:4444/udser/add
+Keep-Alive: timeout=5, max=1000
+Content-Type: application/json
+
+{
+    "name": "asda",
+    "age":2
+}
+
+###
+GET  http://127.0.0.1:3010/rts/getFeConfig
