@@ -1,9 +1,10 @@
-use self::router::XRouter;
+use self::{responce::HttpResponce, router::XRouter};
 use crate::HttpHeader;
-use std::net::TcpStream;
 
 pub mod app;
 pub mod responce;
 pub mod router;
-pub type HttpHandler = fn(header: &HttpHeader, responce: &mut TcpStream);
+pub mod threadpool;
+
+pub type HttpHandler = fn(header: HttpHeader, responce: HttpResponce);
 pub type RouterHander = fn(xrouter: &mut XRouter);

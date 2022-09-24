@@ -1,13 +1,16 @@
-use super::responce::HttpResponce;
+use super::responce::{self, HttpResponce};
 use super::router::XRouter;
-use super::{HttpHandler, RouterHander};
+use super::threadpool::HttpHadnlerThreadPool;
+use super::RouterHander;
 use crate::{HttpHeader, HttpMethod, HttpVersion};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::borrow::Cow;
+use std::borrow::{BorrowMut, Cow};
 use std::collections::HashMap;
+use std::env;
 use std::error::Error;
-use std::io::Write;
+use std::fs::read_to_string;
+use std::path::Path;
 use std::{
     io::Read,
     net::{TcpListener, TcpStream},
@@ -40,21 +43,21 @@ impl App {
         let listener = TcpListener::bind(addr)?;
 
         for steam in listener.incoming() {
-            let streams = &mut steam.unwrap();
+            let streams = steam.unwrap();
             self.handle_request(streams);
         }
 
         Ok(())
     }
 
-    fn handle_request(&mut self, steam: &mut TcpStream) {
+    fn handle_request(&mut self, mut steam: TcpStream) {
         let mut buffer = [0; REQUEST_SIZE];
         steam.read(&mut buffer).unwrap();
         let request_str = String::from_utf8_lossy(&buffer);
         // 解析header
         let header = self.parse_header(request_str);
         // 调用相应的处理函数
-        self.distribute_handler(&header, steam);
+        self.distribute_handler(header, steam);
     }
 
     fn parse_header(&mut self, req: Cow<str>) -> HttpHeader {
@@ -97,7 +100,7 @@ impl App {
         header
     }
 
-    fn distribute_handler(&mut self, header: &HttpHeader, res_handler: &mut TcpStream) {
+    fn distribute_handler(&mut self, header: HttpHeader, res_handler: TcpStream) {
         let method_str = if let HttpMethod::GET = header.method {
             "get"
         } else {
@@ -106,45 +109,23 @@ impl App {
         let xrouter_map_key = format!("{}{}", header.reuqest_addr, method_str);
 
         let handler = self.xrouter.router_table.get(&xrouter_map_key[..]);
-        let mut http_responce_handler = HttpResponce::new(res_handler);
-
+        let http_responce_handler = HttpResponce::new(Box::new(res_handler));
+        let http_thread_pool = HttpHadnlerThreadPool::new(20);
         // 路由表有定义
         if let Some(handle_func) = handler {
-            handle_func(header, res_handler);
+            http_thread_pool.exec(*handle_func, header, http_responce_handler);
         } else {
-            // 没定义返回404
-            self.handle404(header, &mut http_responce_handler);
+            http_thread_pool.exec(Self::handle404, header, http_responce_handler);
         }
     }
 
-    fn handle404(&mut self, _: &HttpHeader, res_handler: &mut HttpResponce) {
-        println!("{}", "404了亲!");
-
-        // let aa = ResponceMessage {
-        //     code: 200,
-        //     message: "success",
-        //     data: vec![1, 222222, 1231123123],
-        // };
+    fn handle404(header: HttpHeader, mut res_handler: HttpResponce) {
+        println!("{} 不存在此路由!", header.reuqest_addr);
         res_handler.set_header("Content-Type", "text/html; charset=utf-8");
-        res_handler.send(
-            r#"<!DOCTYPE html>
-        <html lang="en">
-        
-        <head>
-            <meta charset="UTF-8">
-            <meta http-equiv="X-UA-Compatible" content="IE=edge">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Document</title>
-        </head>
-        
-        <body>
-            <html>吴斌最帅
-        
-            </html>
-        </body>
-        
-        </html>"#,
-        );
+        let cur_dir = env::current_dir().expect("not found path");
+        let page_path = Path::new(&cur_dir).join("../public/404.html");
+        let not_found_page = read_to_string(page_path).unwrap();
+        res_handler.send(&not_found_page[..]);
     }
 
     fn parse_param(str: &str) -> HashMap<String, String> {

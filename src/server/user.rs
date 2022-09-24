@@ -1,20 +1,16 @@
-use crate::HttpHeader;
-use std::{io::Write, net::TcpStream};
+use crate::{xserver::responce::HttpResponce, HttpHeader};
 
 pub struct User {}
 
 impl User {
-    pub fn add_user(header: &HttpHeader, responce: &mut TcpStream) {
+    pub fn add_user(header: HttpHeader, mut responce: HttpResponce) {
         println!("{:#?}", header.body);
-        responce.write(b"HTTP/1.1 200 OK").unwrap();
-        responce.flush().unwrap();
+        responce.send("a");
     }
 
     // 获取用户信息
-    pub fn get_user(header: &HttpHeader, responce: &mut TcpStream) {
+    pub fn get_user(header: HttpHeader, mut responce: HttpResponce) {
         println!("{:#?}", header.request_param);
-
-        responce.write("HTTP/1.1 200 OK".as_bytes()).unwrap();
-        responce.flush().unwrap();
+        responce.send("b");
     }
 }

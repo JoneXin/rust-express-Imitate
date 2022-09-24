@@ -1,8 +1,6 @@
+use super::HttpHandler;
 use std::collections::HashMap;
 
-use crate::xserver::HttpHandler;
-
-#[derive(Clone)]
 pub struct XRouter {
     pub route: String,
     pub router_table: HashMap<String, HttpHandler>,

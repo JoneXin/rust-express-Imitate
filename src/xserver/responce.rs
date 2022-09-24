@@ -4,16 +4,16 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{self, json, Value};
 
-pub struct HttpResponce<'a> {
-    tcp_stream: &'a mut TcpStream,
+pub struct HttpResponce {
+    tcp_stream: Box<TcpStream>,
     res_line: String,
     res_header: String,
     res_data: String,
     res_header_map: HashMap<String, String>,
 }
 
-impl<'a> HttpResponce<'a> {
-    pub fn new(tcp_stream: &'a mut TcpStream) -> HttpResponce<'a> {
+impl HttpResponce {
+    pub fn new(tcp_stream: Box<TcpStream>) -> HttpResponce {
         let header_map = Self::set_default_header();
         HttpResponce {
             tcp_stream,
@@ -40,10 +40,8 @@ impl<'a> HttpResponce<'a> {
     }
 
     pub fn send(&mut self, data: &str) {
-        // self.res_data = serde_json::to_string(&data).unwrap();
         self.res_data = String::from(data);
         self.res_header = self.transform_headermap_to_str();
-        println!("{}", self.res_header);
         self.tcp_stream
             .write(
                 format!(
@@ -55,20 +53,13 @@ impl<'a> HttpResponce<'a> {
             .unwrap();
     }
 
-    pub fn json<R: ?Sized>(&mut self, data: R)
+    pub fn json<'a, R: ?Sized>(&mut self, data: R)
     where
         R: Serialize + Deserialize<'a>,
     {
         let john = json!(data);
         self.res_data = serde_json::to_string(&john).unwrap();
         self.res_header = self.transform_headermap_to_str();
-        println!(
-            "{}",
-            format!(
-                "{}\r\n{}\r\n{}",
-                self.res_line, self.res_header, self.res_data
-            )
-        );
         self.tcp_stream
             .write(
                 format!(
