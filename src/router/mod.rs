@@ -1,4 +1,4 @@
-use crate::server::user::User;
+use crate::service::user::User;
 use crate::xserver::router::XRouter;
 pub struct Router {}
 
