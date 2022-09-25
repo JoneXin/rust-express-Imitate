@@ -2,8 +2,6 @@ use std::{collections::HashMap, fs::read_to_string, io, path::Path};
 
 use serde_json::{json, Value};
 
-use super::ServerConfig;
-
 pub fn get_config() -> Value {
     // 链式调用
     let s = read_to_string("../../config/config.json").expect("找不到配置文件!!");

@@ -2,7 +2,7 @@ use std::{collections::HashMap, io::Write, net::TcpStream};
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use serde_json::{self, json, Value};
+use serde_json::{self, json};
 
 pub struct HttpResponce {
     tcp_stream: Box<TcpStream>,

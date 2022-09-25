@@ -4,7 +4,6 @@ pub struct User {}
 
 impl User {
     pub fn add_user(header: HttpHeader, mut responce: HttpResponce) {
-        println!("{:#?}", header.body);
         responce.send("a");
     }
 

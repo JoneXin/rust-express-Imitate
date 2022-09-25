@@ -1,11 +1,11 @@
-use super::responce::{self, HttpResponce};
+use super::responce::HttpResponce;
 use super::router::XRouter;
 use super::threadpool::HttpHadnlerThreadPool;
-use super::RouterHander;
+use super::{HttpHandler, RouterHander};
 use crate::{HttpHeader, HttpMethod, HttpVersion};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::borrow::{BorrowMut, Cow};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
@@ -17,18 +17,22 @@ use std::{
 };
 
 const REQUEST_SIZE: usize = 1024;
+
 pub struct App {
     xrouter: XRouter,
+    http_thread_pool: HttpHadnlerThreadPool,
 }
 
 impl App {
     pub fn new() -> App {
+        let http_thread_pool = HttpHadnlerThreadPool::new(20);
         // 配置
         App {
             xrouter: XRouter {
                 route: String::from("/"),
                 router_table: HashMap::new(),
             },
+            http_thread_pool,
         }
     }
 
@@ -39,28 +43,28 @@ impl App {
         func(&mut self.xrouter);
     }
 
-    pub fn listen(&mut self, addr: &str) -> Result<(), Box<dyn Error>> {
+    pub fn listen(&self, addr: &str) -> Result<(), Box<dyn Error>> {
         let listener = TcpListener::bind(addr)?;
 
         for steam in listener.incoming() {
-            let streams = steam.unwrap();
-            self.handle_request(streams);
+            let route_map = self.xrouter.router_table.clone();
+            self.http_thread_pool
+                .exec(move || Self::handle_request(steam.unwrap(), route_map))
         }
-
         Ok(())
     }
 
-    fn handle_request(&mut self, mut steam: TcpStream) {
+    fn handle_request(mut steam: TcpStream, route_map: HashMap<String, HttpHandler>) {
         let mut buffer = [0; REQUEST_SIZE];
         steam.read(&mut buffer).unwrap();
         let request_str = String::from_utf8_lossy(&buffer);
         // 解析header
-        let header = self.parse_header(request_str);
+        let header = App::parse_header(request_str);
         // 调用相应的处理函数
-        self.distribute_handler(header, steam);
+        Self::distribute_handler(header, steam, route_map);
     }
 
-    fn parse_header(&mut self, req: Cow<str>) -> HttpHeader {
+    fn parse_header(req: Cow<str>) -> HttpHeader {
         let mut header = HttpHeader {
             method: crate::HttpMethod::GET,
             body: Value::Null,
@@ -72,7 +76,6 @@ impl App {
         // parse header
         let request_addr = req.lines().filter(|line| line.contains("HTTP/")).next();
         if let Some(request_line) = request_addr {
-            println!("{}", request_line);
             let temp_arr: Vec<&str> = request_line.split(" ").collect();
             let route: Vec<&str> = temp_arr[1].split("?").collect();
             // 有参数
@@ -100,7 +103,11 @@ impl App {
         header
     }
 
-    fn distribute_handler(&mut self, header: HttpHeader, res_handler: TcpStream) {
+    fn distribute_handler(
+        header: HttpHeader,
+        res_handler: TcpStream,
+        route_map: HashMap<String, HttpHandler>,
+    ) {
         let method_str = if let HttpMethod::GET = header.method {
             "get"
         } else {
@@ -108,14 +115,14 @@ impl App {
         };
         let xrouter_map_key = format!("{}{}", header.reuqest_addr, method_str);
 
-        let handler = self.xrouter.router_table.get(&xrouter_map_key[..]);
+        let handler = route_map.get(&xrouter_map_key[..]);
         let http_responce_handler = HttpResponce::new(Box::new(res_handler));
-        let http_thread_pool = HttpHadnlerThreadPool::new(20);
+
         // 路由表有定义
         if let Some(handle_func) = handler {
-            http_thread_pool.exec(*handle_func, header, http_responce_handler);
+            handle_func(header, http_responce_handler);
         } else {
-            http_thread_pool.exec(Self::handle404, header, http_responce_handler);
+            App::handle404(header, http_responce_handler);
         }
     }
 
